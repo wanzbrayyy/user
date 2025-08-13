@@ -709,7 +709,7 @@ async def cuaca(event):
     if not mode_public and not await is_authorized(sender): return
     kota = event.pattern_match.group(1)
     try:
-        apikey = os.environ.get("OPENWEATHER_API_KEY", "YOUR_API_KEY")
+        apikey = os.environ.get("OPENWEATHER_API_KEY", "e3cd2c303e5164b7d10b7bcd0c8160e5")
         res = requests.get(f"http://api.openweathermap.org/data/2.5/weather?q={quote(kota)}&appid={apikey}&units=metric&lang=id", timeout=10)
         if res.status_code != 200:
             await event.reply("❌ Gagal mengambil data cuaca. Pastikan nama kota benar dan API Key valid.")
