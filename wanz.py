@@ -149,7 +149,7 @@ f"⚜️ONLY BASE BY MAVERICK⚜️\nMODE: {mode_text}\n\n"
 "/unclone <@user/balas> - hapus clone\n"
 "/clonelist - lihat daftar clone\n"
 "╠══════════════ SEARCH ════════════════╣\n"
-"/ttsearch <kata>\n/ytsearch <kata>\n/pinterest <kata>\n"
+"/ttsearch <kata>\n/ytsearch <kata>\n/pinterest <kata>\n/github <username>\n"
 "╠══════════════ DOWNLOADER ════════════╣\n"
 "/twdl <url>\n/fbdl <url>\n/capcut <url>\n/scdl <judul>\n"
 "╠══════════════ MEDIA ═════════════════╣\n"
@@ -159,7 +159,7 @@ f"⚜️ONLY BASE BY MAVERICK⚜️\nMODE: {mode_text}\n\n"
 "╠══════════════ FUN ═════════════════╣\n"
 "/meme\n/fancy <teks>\n/quotes\n"
 "╠══════════════ UTIL ══════════════════╣\n"
-"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n"
+"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n/tr <lang> <text>\n/ud <term>\n"
 "╚════════════════════════════════════╝"
     )
     if await is_owner(sender) or event.outgoing:
@@ -319,6 +319,7 @@ async def whois(event):
         about = getattr(full, "about", "") or "-"
         username = f"@{user.username}" if getattr(user, "username", None) else "-"
         name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        phone = f"+{user.phone}" if getattr(user, "phone", None) else "Tidak dapat diakses"
         verified = "Ya" if getattr(user, "verified", False) else "Tidak"
         is_bot = "Ya" if getattr(user, "bot", False) else "Tidak"
         status = format_user_status(getattr(user, "status", None))
@@ -339,6 +340,7 @@ async def whois(event):
             f"Nama: {name}\n"
             f"Username: {username}\n"
             f"User ID: `{user.id}`\n"
+            f"No. Telepon: {phone}\n"
             f"Akun Bot: {is_bot}\n"
             f"Terverifikasi: {verified}\n"
             f"Status terakhir: {status}\n"
@@ -726,6 +728,97 @@ async def shortlink(event):
             await event.reply("❌ Gagal")
     except Exception as e:
         await event.reply(f"❌ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'^/github (.+)$'))
+async def github(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
+    username = event.pattern_match.group(1)
+    m = await event.reply(f"🔎 Mencari pengguna GitHub `{username}`...")
+    try:
+        res = requests.get(f"https://api.github.com/users/{quote(username)}", timeout=10).json()
+        if res.get("message") == "Not Found":
+            await m.edit(f"❌ Pengguna GitHub `{username}` tidak ditemukan.")
+            return
+
+        name = res.get('name') or 'Tidak ada nama'
+        user_login = res.get('login')
+        bio = res.get('bio') or 'Tidak ada bio'
+        company = res.get('company') or 'Tidak ada perusahaan'
+        location = res.get('location') or 'Tidak ada lokasi'
+        blog = res.get('blog') or 'Tidak ada blog'
+        followers = res.get('followers', 0)
+        following = res.get('following', 0)
+        public_repos = res.get('public_repos', 0)
+        created_at = res.get('created_at', '').split('T')[0]
+        avatar_url = res.get('avatar_url')
+
+        text = (
+            f"👤 **Info Pengguna GitHub: {user_login}**\n\n"
+            f"**Nama:** {name}\n"
+            f"**Bio:** {bio}\n"
+            f"**Perusahaan:** {company}\n"
+            f"**Lokasi:** {location}\n"
+            f"**Blog:** {blog}\n"
+            f"**Pengikut:** {followers}\n"
+            f"**Mengikuti:** {following}\n"
+            f"**Repositori Publik:** {public_repos}\n"
+            f"**Bergabung pada:** {created_at}\n"
+            f"**Link:** [Buka Profil](https://github.com/{quote(username)})"
+        )
+        if avatar_url:
+            try:
+                photo = await client.download_media(avatar_url, file=bytes)
+                await client.send_file(event.chat_id, io.BytesIO(photo), caption=text, reply_to=event.id, link_preview=False)
+                await m.delete()
+                return
+            except:
+                pass
+        await m.edit(text, link_preview=False)
+    except Exception as e:
+        await m.edit(f"❌ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'^/tr ([\w-]+) (.+)'))
+async def translate(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
+    to_lang = event.pattern_match.group(1)
+    text = event.pattern_match.group(2)
+    m = await event.reply("🔄 Menerjemahkan...")
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={to_lang}&dt=t&q={quote(text)}"
+        res = requests.get(url, timeout=10).json()
+        translated_text = res[0][0][0]
+        from_lang = res[2]
+        await m.edit(f"**Diterjemahkan dari `{from_lang}` ke `{to_lang}`:**\n\n{translated_text}")
+    except Exception as e:
+        await m.edit(f"❌ Gagal menerjemahkan: {e}")
+
+@client.on(events.NewMessage(pattern=r'^/ud (.+)$'))
+async def urban_dictionary(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
+    term = event.pattern_match.group(1)
+    m = await event.reply(f"🔎 Mencari `{term}` di Urban Dictionary...")
+    try:
+        res = requests.get(f"https://api.urbandictionary.com/v0/define?term={quote(term)}", timeout=10).json()
+        if not res or not res.get("list"):
+            await m.edit(f"❌ Tidak ada definisi untuk `{term}`.")
+            return
+
+        definition = res['list'][0]
+        word = definition.get('word')
+        meaning = definition.get('definition').replace('[', '').replace(']', '')
+        example = definition.get('example').replace('[', '').replace(']', '')
+
+        text = (
+            f"**Definisi untuk `{word}`:**\n\n"
+            f"**Arti:**\n{meaning}\n\n"
+            f"**Contoh:**\n_{example}_"
+        )
+        await m.edit(text)
+    except Exception as e:
+        await m.edit(f"❌ Error: {e}")
 
 
 async def main():
