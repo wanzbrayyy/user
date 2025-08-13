@@ -20,7 +20,7 @@ API_ID = 25054644
 API_HASH = "d9c07f75d488f15cb655049af0fb686a"
 OWNER_ID = 7774371395
 # Dapatkan kunci API Anda dari https://app.edenai.run/admin/account/settings
-EDENAI_API_KEY = "YOUR_EDENAI_API_KEY"
+EDENAI_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMGQ5YmYzMzAtYzAyNS00NTM4LThlZGYtYzQxMDkxODBjMGU1IiwidHlwZSI6ImFwaV90b2tlbiJ9.PVCaH6yI1vbuAL-bwnSTKadLgirkDDwzYU4JP-F03xw"
 SESSION_NAME = "session"
 DATA_FILE = "awan_data.json"
 AFK_COOLDOWN = 600 # Cooldown dalam detik (10 menit)
