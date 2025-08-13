@@ -14,10 +14,13 @@ from urllib.parse import quote
 import speech_recognition as sr
 from pydub import AudioSegment
 from datetime import datetime, timezone
+import asyncio
 
 API_ID = 25054644
 API_HASH = "d9c07f75d488f15cb655049af0fb686a"
 OWNER_ID = 7774371395
+# Dapatkan kunci API Anda dari https://app.edenai.run/admin/account/settings
+EDENAI_API_KEY = "YOUR_EDENAI_API_KEY"
 SESSION_NAME = "session"
 DATA_FILE = "awan_data.json"
 AFK_COOLDOWN = 600 # Cooldown dalam detik (10 menit)
@@ -28,6 +31,7 @@ start_time = time.time()
 afk_data = {}
 afk_replied_to = {}
 me = None
+user_interaction_state = {}
 
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w") as f:
@@ -159,7 +163,7 @@ f"⚜️ONLY BASE BY MAVERICK⚜️\nMODE: {mode_text}\n\n"
 "╠══════════════ FUN ═════════════════╣\n"
 "/meme\n/fancy <teks>\n/quotes\n"
 "╠══════════════ UTIL ══════════════════╣\n"
-"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n/tr <lang> <text>\n/ud <term>\n"
+"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n/tr <lang> <text>\n/ud <term>\n/createweb\n"
 "╚════════════════════════════════════╝"
     )
     if await is_owner(sender) or event.outgoing:
@@ -819,6 +823,116 @@ async def urban_dictionary(event):
         await m.edit(text)
     except Exception as e:
         await m.edit(f"❌ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'^/createweb$'))
+async def start_create_web(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
+
+    user_interaction_state[sender.id] = "awaiting_web_description"
+
+    await event.reply("✅ Siap! Silakan jelaskan situs web seperti apa yang Anda inginkan di pesan berikutnya.")
+
+async def generate_website_code(prompt: str):
+    """Calls the Eden AI API to generate website code."""
+    if EDENAI_API_KEY == "YOUR_EDENAI_API_KEY":
+        return None, "Eden AI API Key belum diatur. Silakan edit file wanz.py dan atur EDENAI_API_KEY."
+
+    headers = {"Authorization": f"Bearer {EDENAI_API_KEY}"}
+    payload = {
+        "providers": "openai",
+        "prompt": prompt,
+        "instruction": "Generate a single, complete HTML file with CSS and JavaScript included. The file should be ready to be saved as index.html and opened in a browser.",
+        "temperature": 0.2,
+        "max_tokens": 4000,
+        "fallback_providers": "google"
+    }
+    url = "https://api.edenai.run/v2/text/code_generation"
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+
+        # Check for provider-specific errors
+        if result.get('openai', {}).get('status') == 'fail':
+            return None, f"Gagal menghasilkan kode: {result['openai'].get('error', {}).get('message', 'Error tidak diketahui dari OpenAI')}"
+
+        generated_code = result.get('openai', {}).get('generated_text', '')
+        if not generated_code:
+             return None, "Gagal mendapatkan kode dari API. Respon kosong."
+
+        return generated_code, None
+    except requests.exceptions.RequestException as e:
+        return None, f"Error koneksi ke Eden AI: {e}"
+    except Exception as e:
+        return None, f"Terjadi error: {e}"
+
+async def loading_animation(message):
+    """Animates a loading message."""
+    chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    while True:
+        try:
+            for char in chars:
+                await message.edit(f"⏳ Sedang membuat... {char}")
+                await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            # Task was cancelled, break the loop
+            break
+        except Exception:
+            # Other exceptions (e.g., message deleted)
+            break
+
+@client.on(events.NewMessage(func=lambda e: e.sender_id in user_interaction_state and user_interaction_state[e.sender_id] == "awaiting_web_description"))
+async def handle_web_description(event):
+    sender = await event.get_sender()
+    description = event.message.text
+
+    if description.startswith('/'):
+        del user_interaction_state[sender.id]
+        await event.reply("❌ Pembuatan situs web dibatalkan.")
+        return
+
+    del user_interaction_state[sender.id]
+
+    m = await event.reply("⏳ Sedang membuat...")
+
+    loading_task = asyncio.create_task(loading_animation(m))
+
+    code, error = await generate_website_code(description)
+
+    loading_task.cancel()
+
+    if error:
+        await m.edit(f"❌ Terjadi kesalahan: {error}")
+        return
+
+    # Clean the generated code
+    if code.strip().startswith("```html"):
+        code = code.strip()[7:]
+        if code.endswith("```"):
+            code = code[:-3]
+
+    # Save the code to a file
+    file_path = "index.html"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+    await m.edit(f"✅ Kode berhasil dibuat dan disimpan sebagai `{file_path}`. Mengirim file...")
+
+    try:
+        await client.send_file(
+            event.chat_id,
+            file_path,
+            caption=f"Berikut adalah situs web yang dibuat berdasarkan deskripsi Anda:\n\n`{description}`",
+            reply_to=event.id
+        )
+        await m.delete()
+    except Exception as e:
+        await m.edit(f"❌ Gagal mengirim file: {e}")
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 async def main():
