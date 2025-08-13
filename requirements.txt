@@ -1,0 +1,6 @@
+telethon
+psutil
+requests
+Pillow
+pydub
+SpeechRecognition
