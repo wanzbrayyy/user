@@ -8,7 +8,7 @@ from telethon.tl.types import (
     UserStatusLastWeek,
     UserStatusLastMonth,
 )
-import time, psutil, requests, io, os, json, random
+import time, psutil, requests, io, os, json, random, base64
 from PIL import Image, ImageDraw, ImageFont
 from urllib.parse import quote
 import speech_recognition as sr
@@ -80,6 +80,77 @@ def uptime_str_custom(s):
     sec = s % 60
     return f"{int(h)} jam {int(m)} menit {int(sec)} detik"
 
+def text_wrapper(text, font, max_width):
+    lines = []
+    words = text.split(' ')
+    i = 0
+    while i < len(words):
+        line = ''
+        while i < len(words) and font.getbbox(line + words[i])[2] <= max_width:
+            line += words[i] + " "
+            i += 1
+        if not line:
+            # Handle cases where a single word is longer than max_width
+            line = words[i]
+            i += 1
+        lines.append(line.strip())
+    return lines
+
+async def create_response_image(title, text):
+    # Paths and constants
+    FONT_PATH = "resources/VarelaRound-Regular.otf"
+    LOGO_PATH = "resources/logo.png"
+    ORANGE = (255, 135, 0)
+    WHITE = (255, 255, 255)
+    BACKGROUND_COLOR = (44, 44, 44)
+    WIDTH = 512
+
+    # Load fonts
+    try:
+        title_font = ImageFont.truetype(FONT_PATH, 30)
+        text_font = ImageFont.truetype(FONT_PATH, 20)
+    except IOError:
+        title_font = ImageFont.load_default()
+        text_font = ImageFont.load_default()
+
+    # Wrap text and calculate height
+    wrapped_text = text_wrapper(text, text_font, WIDTH - 40)
+    text_height = len(wrapped_text) * 25
+    final_height = max(120, 90 + text_height + 20) # Min height of 120
+
+    # Create base image
+    img = Image.new("RGBA", (WIDTH, final_height), BACKGROUND_COLOR)
+    draw = ImageDraw.Draw(img)
+
+    # Draw orange bar
+    draw.rectangle([(0, 0), (15, final_height)], fill=ORANGE)
+
+    # Load and paste logo
+    try:
+        logo = Image.open(LOGO_PATH).convert("RGBA")
+        logo.thumbnail((80, 80))
+        img.paste(logo, (30, 30), logo)
+    except FileNotFoundError:
+        draw.rectangle([(30, 30), (110, 110)], fill=(60, 60, 60))
+        draw.text((45, 55), "Logo", fill=WHITE, font=ImageFont.load_default())
+
+    # Draw title
+    draw.text((130, 40), title, font=title_font, fill=WHITE)
+
+    # Draw main text
+    y_text = 90
+    for line in wrapped_text:
+        draw.text((30, y_text), line, font=text_font, fill=WHITE)
+        y_text += 25
+
+    # Save to BytesIO
+    out = io.BytesIO()
+    out.name = "response.webp"
+    img.save(out, "WEBP")
+    out.seek(0)
+    return out
+
+
 async def is_owner(sender):
     if sender is None: return False
     return sender.id == OWNER_ID
@@ -139,36 +210,74 @@ async def find_first_message_date(chat_id, user_id, max_messages=20000):
         return None
     return None
 
-@client.on(events.NewMessage(pattern=r'^/(start|menu)$'))
+@client.on(events.NewMessage(pattern=r'^/(start|menu|help)$'))
 async def show_menu(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     mode_text = "PUBLIC" if mode_public else "SELF"
-    menu = (
-f"⚜️ONLY BASE BY MAVERICK⚜️\nMODE: {mode_text}\n\n"
-"╔═══════════════ UTAMA ═══════════════╗\n"
-"/ping - status bot\n"
-"/whois <@user/reply> - info pengguna\n"
-"/text <teks> - buat stiker teks\n"
-"/afk [alasan] - set mode AFK\n"
-"╠═══════════════ OWNER ═══════════════╣\n"
-"/clone <@user/balas> - clone user\n"
-"/unclone <@user/balas> - hapus clone\n"
-"/clonelist - lihat daftar clone\n"
-"╠══════════════ SEARCH ════════════════╣\n"
-"/ttsearch <kata>\n/ytsearch <kata>\n/pinterest <kata>\n/github <username>\n"
-"╠══════════════ DOWNLOADER ════════════╣\n"
-"/twdl <url>\n/fbdl <url>\n/capcut <url>\n/scdl <judul>\n"
-"╠══════════════ MEDIA ═════════════════╣\n"
-"/topdf (reply foto)\n/resize <WxH> (reply foto)\n/audiotext (reply voice/file)\n"
-"╠══════════════ GROUP ═════════════════╣\n"
-"/setwelcome <teks>\n/anti <on/off>\n/group\n"
-"╠══════════════ FUN ═════════════════╣\n"
-"/meme\n/fancy <teks>\n/quotes\n"
-"╠══════════════ UTIL ══════════════════╣\n"
-"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n/tr <lang> <text>\n/ud <term>\n/createweb\n/tempmail\n"
-"╚════════════════════════════════════╝"
+
+    menu_utama = (
+        "**UTAMA**\n"
+        "`/ping` - Cek status bot\n"
+        "`/whois <@user/reply>` - Info pengguna\n"
+        "`/text <teks>` - Buat stiker dari teks\n"
+        "`/afk [alasan]` - Set mode AFK"
     )
+
+    menu_owner = (
+        "**OWNER**\n"
+        "`/clone <@user/balas>` - Clone user\n"
+        "`/unclone <@user/balas>` - Hapus clone\n"
+        "`/clonelist` - Lihat daftar clone"
+    )
+
+    menu_search = (
+        "**PENCARIAN**\n"
+        "`/ttsearch <kata>`\n`/ytsearch <kata>`\n"
+        "`/pinterest <kata>`\n`/github <username>`"
+    )
+
+    menu_downloader = (
+        "**DOWNLOADER**\n"
+        "`/twdl <url>`\n`/fbdl <url>`\n"
+        "`/capcut <url>`\n`/scdl <judul>`"
+    )
+
+    menu_media = (
+        "**MEDIA**\n"
+        "`/topdf` (reply foto)\n"
+        "`/resize <WxH>` (reply foto)\n"
+        "`/audiotext` (reply voice)\n"
+        "`/tts <teks>` - Text to Speech"
+    )
+
+    menu_grup = (
+        "**GRUP**\n"
+        "`/setwelcome <teks>`\n"
+        "`/anti <on/off>`\n"
+        "`/group`\n"
+        "`/kick <@user/reply>`"
+    )
+
+    menu_fun = (
+        "**FUN**\n"
+        "`/meme`\n`/fancy <teks>`\n`/quotes`"
+    )
+
+    menu_util = (
+        "**UTILITAS**\n"
+        "`/cuaca <kota>`\n`/cekip`\n`/crypto <simbol>`\n"
+        "`/shortlink <url>`\n`/tr <lang> <teks>`\n"
+        "`/ud <istilah>`\n`/createweb`\n`/tempmail`"
+    )
+
+    menu = (
+        f"⚜️ **Awan Userbot** ⚜️\nMode: `{mode_text}`\n\n"
+        f"{menu_utama}\n\n{menu_owner}\n\n{menu_search}\n\n"
+        f"{menu_downloader}\n\n{menu_media}\n\n{menu_grup}\n\n"
+        f"{menu_fun}\n\n{menu_util}"
+    )
+
     if await is_owner(sender) or event.outgoing:
         await event.edit(menu)
     else:
@@ -234,9 +343,19 @@ async def afk_handler(event):
         if event.is_private or event.mentioned:
             since_ts = afk_data.get("since", time.time())
             uptime_afk = uptime_str_custom(time.time() - since_ts)
-            reply_message = f"{afk_data.get('message')}\n\nSaya telah AFK selama: `{uptime_afk}`"
             
-            await client.send_message(await event.get_chat(), reply_message)
+            # Data for the image
+            title = "Sedang AFK"
+            text = f"{afk_data.get('message')}\n\nAFK selama: {uptime_afk}"
+
+            # Generate and send image
+            image_data = await create_response_image(title, text)
+            await client.send_file(
+                await event.get_chat(),
+                image_data,
+                force_document=False,
+                reply_to=event.id
+            )
             afk_replied_to[event.chat_id] = time.time()
 
 
@@ -301,9 +420,23 @@ async def ping(event):
     t0 = time.time()
     m = await event.reply("🔄 Checking...")
     ping_ms = (time.time() - t0) * 1000
-    txt = (f"🚀 Awan Userbot\n⚡ Ping: {int(ping_ms)} ms\n💻 CPU: {cpu_safe()}\n"
-           f"💾 RAM: {psutil.virtual_memory().percent}%\n💽 Disk: {psutil.disk_usage('/').percent}%\n⏳ Uptime: {uptime_str()}")
-    await m.edit(txt)
+
+    # Data for the image
+    title = "Pong!"
+    text = (f"Ping: {int(ping_ms)} ms\n"
+            f"CPU: {cpu_safe()}\n"
+            f"RAM: {psutil.virtual_memory().percent}%\n"
+            f"Uptime: {uptime_str()}")
+
+    # Generate and send image
+    image_data = await create_response_image(title, text)
+    await client.send_file(
+        event.chat_id,
+        image_data,
+        force_document=False,
+        reply_to=event.id
+    )
+    await m.delete()
 
 @client.on(events.NewMessage(pattern=r'^/whois(?:\s+(.+))?$'))
 async def whois(event):
@@ -666,61 +799,107 @@ async def fancy(event):
 async def quotes(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
+    m = await event.reply("💬 Mengambil kutipan...")
     try:
         res = requests.get("https://api.quotable.io/random", timeout=10).json()
-        await event.reply(f"“{res.get('content')}” — {res.get('author')}")
+        title = f"— {res.get('author')}"
+        text = f"“{res.get('content')}”"
+
+        image_data = await create_response_image(title, text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
+        )
+        await m.delete()
     except Exception as e:
-        await event.reply(f"❌ Error: {e}")
+        await m.edit(f"❌ Error: {e}")
 
 @client.on(events.NewMessage(pattern=r'^/cekip$'))
 async def cekip(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
+    m = await event.reply("🌐 Mengecek IP...")
     try:
         ip = requests.get("https://api.ipify.org").text
         geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=10).json()
-        txt = f"IP: `{ip}`\nNegara: {geo.get('country')}\nKota: {geo.get('city')}\nISP: {geo.get('isp')}"
-        await event.reply(txt)
+
+        title = "Informasi IP"
+        text = (f"IP: {ip}\n"
+                f"Negara: {geo.get('country')}\n"
+                f"Kota: {geo.get('city')}\n"
+                f"ISP: {geo.get('isp')}")
+
+        image_data = await create_response_image(title, text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
+        )
+        await m.delete()
     except Exception as e:
-        await event.reply(f"❌ Error: {e}")
+        await m.edit(f"❌ Error: {e}")
 
 @client.on(events.NewMessage(pattern=r'^/crypto (.+)$'))
 async def crypto(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     sym = event.pattern_match.group(1).lower()
+    m = await event.reply("📈 Mengecek harga crypto...")
     try:
         res = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={quote(sym)}&vs_currencies=usd", timeout=10)
-        if res.status_code != 200:
-            await event.reply("❌ Tidak ditemukan")
+        if res.status_code != 200 or not res.json():
+            await m.edit(f"❌ Crypto dengan simbol `{sym}` tidak ditemukan.")
             return
+
         data = res.json()
-        if not data:
-            await event.reply("❌ Tidak ditemukan")
-            return
         usd = list(data.values())[0].get("usd")
-        await event.reply(f"{sym.upper()} = ${usd}")
+
+        title = f"Harga {sym.upper()}"
+        text = f"1 {sym.upper()} = ${usd}"
+
+        image_data = await create_response_image(title, text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
+        )
+        await m.delete()
     except Exception as e:
-        await event.reply(f"❌ Error: {e}")
+        await m.edit(f"❌ Error: {e}")
 
 @client.on(events.NewMessage(pattern=r'^/cuaca (.+)$'))
 async def cuaca(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     kota = event.pattern_match.group(1)
+    m = await event.reply("🌦️ Mengecek cuaca...")
     try:
         apikey = os.environ.get("OPENWEATHER_API_KEY", "e3cd2c303e5164b7d10b7bcd0c8160e5")
         res = requests.get(f"http://api.openweathermap.org/data/2.5/weather?q={quote(kota)}&appid={apikey}&units=metric&lang=id", timeout=10)
         if res.status_code != 200:
-            await event.reply("❌ Gagal mengambil data cuaca. Pastikan nama kota benar dan API Key valid.")
+            await m.edit("❌ Gagal mengambil data cuaca. Pastikan nama kota benar.")
             return
+
         d = res.json()
-        txt = (f"Cuaca di {d['name']}, {d['sys']['country']}\n"
-               f"{d['weather'][0]['description'].capitalize()}\n"
-               f"Suhu: {d['main']['temp']}°C\nKelembapan: {d['main']['humidity']}%")
-        await event.reply(txt)
+        title = f"Cuaca di {d['name']}"
+        text = (f"{d['weather'][0]['description'].capitalize()}\n"
+                f"Suhu: {d['main']['temp']}°C\n"
+                f"Kelembapan: {d['main']['humidity']}%")
+
+        image_data = await create_response_image(title, text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
+        )
+        await m.delete()
     except Exception as e:
-        await event.reply(f"❌ Error: {e}")
+        await m.edit(f"❌ Error: {e}")
 
 @client.on(events.NewMessage(pattern=r'^/shortlink (.+)$'))
 async def shortlink(event):
@@ -790,14 +969,24 @@ async def translate(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     to_lang = event.pattern_match.group(1)
-    text = event.pattern_match.group(2)
+    text_to_translate = event.pattern_match.group(2)
     m = await event.reply("🔄 Menerjemahkan...")
     try:
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={to_lang}&dt=t&q={quote(text)}"
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={to_lang}&dt=t&q={quote(text_to_translate)}"
         res = requests.get(url, timeout=10).json()
         translated_text = res[0][0][0]
         from_lang = res[2]
-        await m.edit(f"**Diterjemahkan dari `{from_lang}` ke `{to_lang}`:**\n\n{translated_text}")
+
+        title = f"Terjemahan {from_lang} -> {to_lang}"
+
+        image_data = await create_response_image(title, translated_text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
+        )
+        await m.delete()
     except Exception as e:
         await m.edit(f"❌ Gagal menerjemahkan: {e}")
 
@@ -815,17 +1004,77 @@ async def urban_dictionary(event):
 
         definition = res['list'][0]
         word = definition.get('word')
-        meaning = definition.get('definition').replace('[', '').replace(']', '')
-        example = definition.get('example').replace('[', '').replace(']', '')
+        meaning = definition.get('definition', '').replace('[', '').replace(']', '')
+        example = definition.get('example', '').replace('[', '').replace(']', '')
 
-        text = (
-            f"**Definisi untuk `{word}`:**\n\n"
-            f"**Arti:**\n{meaning}\n\n"
-            f"**Contoh:**\n_{example}_"
+        title = f"Definisi \"{word}\""
+        text = f"{meaning}\n\nContoh:\n{example}"
+
+        image_data = await create_response_image(title, text)
+        await client.send_file(
+            event.chat_id,
+            image_data,
+            force_document=False,
+            reply_to=event.id
         )
-        await m.edit(text)
+        await m.delete()
     except Exception as e:
         await m.edit(f"❌ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'^/tts (.+)$'))
+async def text_to_speech(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
+
+    text = event.pattern_match.group(1)
+    m = await event.reply("🎤 Memproses Text-to-Speech...")
+
+    if EDENAI_API_KEY == "YOUR_EDENAI_API_KEY" or not EDENAI_API_KEY:
+        await m.edit("❌ Kunci API Eden AI belum diatur. Silakan daftar di https://app.edenai.run/admin/account/settings dan atur `EDENAI_API_KEY` di file wanz.py.")
+        return
+
+    headers = {"Authorization": f"Bearer {EDENAI_API_KEY}"}
+    payload = {
+        "providers": "openai",
+        "language": "id-ID",
+        "option": "FEMALE",
+        "text": text,
+        "fallback_providers": "google"
+    }
+    url = "https://api.edenai.run/v2/audio/text_to_speech"
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get('openai', {}).get('status') != 'success':
+            error_message = result.get('openai', {}).get('error', {}).get('message', 'Error tidak diketahui')
+            await m.edit(f"❌ Gagal menghasilkan audio: {error_message}")
+            return
+
+        audio_base64 = result['openai']['audio']
+        audio_data = base64.b64decode(audio_base64)
+
+        file_path = "tts_output.ogg"
+        with open(file_path, "wb") as f:
+            f.write(audio_data)
+
+        await client.send_file(
+            event.chat_id,
+            file_path,
+            voice_note=True,
+            reply_to=event.id
+        )
+        await m.delete()
+
+    except requests.exceptions.RequestException as e:
+        await m.edit(f"❌ Error koneksi ke Eden AI: {e}")
+    except Exception as e:
+        await m.edit(f"❌ Terjadi error: {e}")
+    finally:
+        if os.path.exists("tts_output.ogg"):
+            os.remove("tts_output.ogg")
 
 @client.on(events.NewMessage(pattern=r'^/createweb$'))
 async def start_create_web(event):
