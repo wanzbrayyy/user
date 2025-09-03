@@ -80,89 +80,6 @@ def uptime_str_custom(s):
     sec = s % 60
     return f"{int(h)} jam {int(m)} menit {int(sec)} detik"
 
-def text_wrapper(text, font, max_width):
-    lines = []
-    words = text.split(' ')
-    i = 0
-    while i < len(words):
-        line = ''
-        while i < len(words) and font.getbbox(line + words[i])[2] <= max_width:
-            line += words[i] + " "
-            i += 1
-        if not line:
-            # Handle cases where a single word is longer than max_width
-            line = words[i]
-            i += 1
-        lines.append(line.strip())
-    return lines
-
-async def reply_with_image(event, title, text, message_to_edit=None):
-    """Helper function to generate and send a styled image response."""
-    image_data = await create_response_image(title, text)
-    await client.send_file(
-        event.chat_id,
-        image_data,
-        force_document=False,
-        reply_to=event.id
-    )
-    if message_to_edit:
-        await message_to_edit.delete()
-
-async def create_response_image(title, text):
-    # Paths and constants
-    FONT_PATH = "resources/VarelaRound-Regular.otf"
-    LOGO_PATH = "resources/logo.png"
-    ORANGE = (255, 135, 0)
-    WHITE = (255, 255, 255)
-    BACKGROUND_COLOR = (44, 44, 44)
-    WIDTH = 512
-
-    # Load fonts
-    try:
-        title_font = ImageFont.truetype(FONT_PATH, 30)
-        text_font = ImageFont.truetype(FONT_PATH, 20)
-    except IOError:
-        title_font = ImageFont.load_default()
-        text_font = ImageFont.load_default()
-
-    # Wrap text and calculate height
-    wrapped_text = text_wrapper(text, text_font, WIDTH - 40)
-    text_height = len(wrapped_text) * 25
-    final_height = max(120, 90 + text_height + 20) # Min height of 120
-
-    # Create base image
-    img = Image.new("RGBA", (WIDTH, final_height), BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    # Draw orange bar
-    draw.rectangle([(0, 0), (15, final_height)], fill=ORANGE)
-
-    # Load and paste logo
-    try:
-        logo = Image.open(LOGO_PATH).convert("RGBA")
-        logo.thumbnail((80, 80))
-        img.paste(logo, (30, 30), logo)
-    except FileNotFoundError:
-        draw.rectangle([(30, 30), (110, 110)], fill=(60, 60, 60))
-        draw.text((45, 55), "Logo", fill=WHITE, font=ImageFont.load_default())
-
-    # Draw title
-    draw.text((130, 40), title, font=title_font, fill=WHITE)
-
-    # Draw main text
-    y_text = 90
-    for line in wrapped_text:
-        draw.text((30, y_text), line, font=text_font, fill=WHITE)
-        y_text += 25
-
-    # Save to BytesIO
-    out = io.BytesIO()
-    out.name = "response.webp"
-    img.save(out, "WEBP")
-    out.seek(0)
-    return out
-
-
 async def is_owner(sender):
     if sender is None: return False
     return sender.id == OWNER_ID
@@ -227,63 +144,90 @@ async def show_menu(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     mode_text = "PUBLIC" if mode_public else "SELF"
-
-    menu_text = (
-        "UTAMA:\n"
-        "/ping - Cek status bot\n"
-        "/whois <@user/reply> - Info pengguna\n"
-        "/text <teks> - Buat stiker dari teks\n"
-        "/afk [alasan] - Set mode AFK\n\n"
-        "OWNER:\n"
-        "/clone <@user/balas> - Clone user\n"
-        "/unclone <@user/balas> - Hapus clone\n"
-        "/clonelist - Lihat daftar clone\n\n"
-        "PENCARIAN:\n"
-        "/ttsearch <kata>\n/ytsearch <kata>\n"
-        "/pinterest <kata>\n/github <username>\n\n"
-        "DOWNLOADER:\n"
-        "/twdl <url>\n/fbdl <url>\n"
-        "/capcut <url>\n/scdl <judul>\n\n"
-        "MEDIA:\n"
-        "/topdf (reply foto)\n"
-        "/resize <WxH> (reply foto)\n"
-        "/audiotext (reply voice)\n"
-        "/tts <teks> - Text to Speech\n\n"
-        "GRUP:\n"
-        "/setwelcome <teks>\n"
-        "/anti <on/off>\n"
-        "/group\n"
-        "/kick <@user/reply>\n\n"
-        "FUN:\n"
-        "/meme\n/fancy <teks>\n/quotes\n\n"
-        "UTILITAS:\n"
-        "/cuaca <kota>\n/cekip\n/crypto <simbol>\n"
-        "/shortlink <url>\n/tr <lang> <teks>\n"
-        "/ud <istilah>\n/createweb\n/tempmail"
+    menu = (
+f"⚜️ONLY BASE BY MAVERICK⚜️\nMODE: {mode_text}\n\n"
+"╔═══════════════ UTAMA ═══════════════╗\n"
+"/ping - status bot\n"
+"/whois <@user/reply> - info pengguna\n"
+"/text <teks> - buat stiker teks\n"
+"/afk [alasan] - set mode AFK\n"
+"╠═══════════════ OWNER ═══════════════╣\n"
+"/clone <@user/balas> - clone user\n"
+"/unclone <@user/balas> - hapus clone\n"
+"/clonelist - lihat daftar clone\n"
+"╠══════════════ SEARCH ════════════════╣\n"
+"/ttsearch <kata>\n/ytsearch <kata>\n/pinterest <kata>\n/github <username>\n"
+"╠══════════════ DOWNLOADER ════════════╣\n"
+"/twdl <url>\n/fbdl <url>\n/capcut <url>\n/scdl <judul>\n"
+"╠══════════════ MEDIA ═════════════════╣\n"
+"/topdf (reply foto)\n/resize <WxH> (reply foto)\n/audiotext (reply voice/file)\n"
+"╠══════════════ GROUP ═════════════════╣\n"
+"/setwelcome <teks>\n/anti <on/off>\n/group\n"
+"╠══════════════ FUN ═════════════════╣\n"
+"/meme\n/fancy <teks>\n/quotes\n"
+"╠══════════════ UTIL ══════════════════╣\n"
+"/cuaca <kota>\n/cekip\n/crypto <symbol>\n/shortlink <url>\n/tr <lang> <text>\n/tts <teks>\n/ud <term>\n/createweb\n/tempmail\n"
+"╚════════════════════════════════════╝"
     )
-
-    title = f"Awan Userbot | Mode: {mode_text}"
-
-    # For outgoing messages, we can edit the original message.
-    # For incoming messages, we send a new reply.
-    if event.outgoing:
-        await reply_with_image(event, title, menu_text, message_to_edit=event.message)
+    if event.out:
+        await event.edit(menu)
     else:
-        await reply_with_image(event, title, menu_text)
+        await event.reply(menu)
 
-@client.on(events.NewMessage(pattern=r'^/self$', outgoing=True))
-async def set_self(event):
-    global mode_public
-    if not await is_owner(await event.get_sender()): return
-    mode_public = False
-    await reply_with_image(event, "Mode Diubah", "Mode userbot sekarang SELF.", message_to_edit=event.message)
+@client.on(events.NewMessage(pattern=r'^/tts (.+)$'))
+async def text_to_speech(event):
+    sender = await event.get_sender()
+    if not mode_public and not await is_authorized(sender): return
 
-@client.on(events.NewMessage(pattern=r'^/public$', outgoing=True))
-async def set_public(event):
-    global mode_public
-    if not await is_owner(await event.get_sender()): return
-    mode_public = True
-    await reply_with_image(event, "Mode Diubah", "Mode userbot sekarang PUBLIC.", message_to_edit=event.message)
+    text = event.pattern_match.group(1)
+    m = await event.reply("🎤 Memproses Text-to-Speech...")
+
+    if EDENAI_API_KEY == "YOUR_EDENAI_API_KEY" or not EDENAI_API_KEY:
+        await m.edit("**Error**\n\nKunci API Eden AI belum diatur. Silakan daftar di https://app.edenai.run/admin/account/settings dan atur `EDENAI_API_KEY` di file wanz.py.")
+        return
+
+    headers = {"Authorization": f"Bearer {EDENAI_API_KEY}"}
+    payload = {
+        "providers": "openai",
+        "language": "id-ID",
+        "option": "FEMALE",
+        "text": text,
+        "fallback_providers": "google"
+    }
+    url = "https://api.edenai.run/v2/audio/text_to_speech"
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get('openai', {}).get('status') != 'success':
+            error_message = result.get('openai', {}).get('error', {}).get('message', 'Error tidak diketahui')
+            await m.edit(f"**Error**\n\nGagal menghasilkan audio: `{error_message}`")
+            return
+
+        audio_base64 = result['openai']['audio']
+        audio_data = base64.b64decode(audio_base64)
+
+        file_path = "tts_output.ogg"
+        with open(file_path, "wb") as f:
+            f.write(audio_data)
+
+        await client.send_file(
+            event.chat_id,
+            file_path,
+            voice_note=True,
+            reply_to=event.id
+        )
+        await m.delete()
+
+    except requests.exceptions.RequestException as e:
+        await m.edit(f"**Error**\n\nError koneksi ke Eden AI: `{e}`")
+    except Exception as e:
+        await m.edit(f"**Error**\n\nTerjadi error: `{e}`")
+    finally:
+        if os.path.exists("tts_output.ogg"):
+            os.remove("tts_output.ogg")
 
 @client.on(events.NewMessage(pattern=r'^/afk(?:\s+(.*))?$', outgoing=True))
 async def set_afk(event):
@@ -295,7 +239,7 @@ async def set_afk(event):
     afk_data["since"] = time.time()
     afk_data["message"] = text if text else "Saya sedang tidak di tempat (AFK)."
     save_afk_to_disk()
-    await reply_with_image(event, "Mode AFK Aktif", f"Pesan: {afk_data['message']}", message_to_edit=event.message)
+    await event.edit(f"**Mode AFK diaktifkan.**\nPesan: `{afk_data['message']}`")
 
 @client.on(events.NewMessage(func=lambda e: not e.from_scheduled))
 async def afk_handler(event):
@@ -311,9 +255,10 @@ async def afk_handler(event):
             afk_data["is_afk"] = False
             afk_replied_to.clear()
             save_afk_to_disk()
-
-            # Send the deactivation message as an image
-            await reply_with_image(event, "Mode AFK Nonaktif", f"Anda AFK selama: {afk_time}")
+            await client.send_message(
+                await event.get_chat(),
+                f"✅ **Mode AFK telah dinonaktifkan.**\nAnda AFK selama: `{afk_time}`"
+            )
         return
     
     # Membalas pesan jika AFK aktif dan pesan dari orang lain
@@ -330,19 +275,8 @@ async def afk_handler(event):
         if event.is_private or event.mentioned:
             since_ts = afk_data.get("since", time.time())
             uptime_afk = uptime_str_custom(time.time() - since_ts)
-            
-            # Data for the image
-            title = "Sedang AFK"
-            text = f"{afk_data.get('message')}\n\nAFK selama: {uptime_afk}"
-
-            # Generate and send image
-            image_data = await create_response_image(title, text)
-            await client.send_file(
-                await event.get_chat(),
-                image_data,
-                force_document=False,
-                reply_to=event.id
-            )
+            reply_message = f"**Sedang AFK**\n\n{afk_data.get('message')}\n\nSaya telah AFK selama: `{uptime_afk}`"
+            await event.reply(reply_message)
             afk_replied_to[event.chat_id] = time.time()
 
 
@@ -352,17 +286,17 @@ async def clone_user(event):
     m = await event.edit("🔄 Memproses...")
     target_user = await get_target_user(event)
     if not target_user:
-        await reply_with_image(event, "Error", "Balas pesan pengguna atau berikan username/ID untuk di-clone.", message_to_edit=m)
+        await m.edit("**Error**\n\nBalas pesan pengguna atau berikan username/ID untuk di-clone.")
         return
     data = load_data()
     cloned_users = data.get("cloned_users", [])
     if target_user.id in cloned_users:
-        await reply_with_image(event, "Info", f"Pengguna {target_user.first_name} sudah ada dalam daftar clone.", message_to_edit=m)
+        await m.edit(f"**Info**\n\nPengguna `{target_user.first_name}` sudah ada dalam daftar clone.")
         return
     cloned_users.append(target_user.id)
     data["cloned_users"] = cloned_users
     save_data(data)
-    await reply_with_image(event, "Sukses", f"Pengguna {target_user.first_name} berhasil di-clone.", message_to_edit=m)
+    await m.edit(f"**Sukses**\n\nPengguna `{target_user.first_name}` berhasil di-clone.")
 
 @client.on(events.NewMessage(pattern=r'^/unclone(?:\s+(.*))?$', outgoing=True))
 async def unclone_user(event):
@@ -370,17 +304,17 @@ async def unclone_user(event):
     m = await event.edit("🔄 Memproses...")
     target_user = await get_target_user(event)
     if not target_user:
-        await reply_with_image(event, "Error", "Balas pesan pengguna atau berikan username/ID untuk di-unclone.", message_to_edit=m)
+        await m.edit("**Error**\n\nBalas pesan pengguna atau berikan username/ID untuk di-unclone.")
         return
     data = load_data()
     cloned_users = data.get("cloned_users", [])
     if target_user.id not in cloned_users:
-        await reply_with_image(event, "Error", f"Pengguna {target_user.first_name} tidak ditemukan dalam daftar clone.", message_to_edit=m)
+        await m.edit(f"**Error**\n\nPengguna `{target_user.first_name}` tidak ditemukan dalam daftar clone.")
         return
     cloned_users.remove(target_user.id)
     data["cloned_users"] = cloned_users
     save_data(data)
-    await reply_with_image(event, "Sukses", f"Akses untuk {target_user.first_name} telah dicabut.", message_to_edit=m)
+    await m.edit(f"**Sukses**\n\nAkses untuk `{target_user.first_name}` telah dicabut.")
 
 @client.on(events.NewMessage(pattern=r'^/clonelist$', outgoing=True))
 async def list_clones(event):
@@ -389,18 +323,18 @@ async def list_clones(event):
     data = load_data()
     cloned_users_ids = data.get("cloned_users", [])
     if not cloned_users_ids:
-        await reply_with_image(event, "Daftar Clone", "Tidak ada pengguna yang di-clone.", message_to_edit=m)
+        await m.edit("**Daftar Clone**\n\nTidak ada pengguna yang di-clone.")
         return
 
-    text = ""
+    text = "**Daftar Pengguna Clone**\n\n"
     for user_id in cloned_users_ids:
         try:
             user = await client.get_entity(user_id)
-            text += f"- {user.first_name} ({user.id})\n"
+            text += f"- {user.first_name} (`{user.id}`)\n"
         except Exception:
-            text += f"- Gagal mengambil info untuk ID {user_id}\n"
+            text += f"- Gagal mengambil info untuk ID `{user_id}`\n"
 
-    await reply_with_image(event, "Daftar Pengguna Clone", text, message_to_edit=m)
+    await m.edit(text)
 
 @client.on(events.NewMessage(pattern=r'^/ping$'))
 async def ping(event):
@@ -410,22 +344,13 @@ async def ping(event):
     m = await event.reply("🔄 Checking...")
     ping_ms = (time.time() - t0) * 1000
 
-    # Data for the image
-    title = "Pong!"
-    text = (f"Ping: {int(ping_ms)} ms\n"
-            f"CPU: {cpu_safe()}\n"
-            f"RAM: {psutil.virtual_memory().percent}%\n"
-            f"Uptime: {uptime_str()}")
-
-    # Generate and send image
-    image_data = await create_response_image(title, text)
-    await client.send_file(
-        event.chat_id,
-        image_data,
-        force_document=False,
-        reply_to=event.id
-    )
-    await m.delete()
+    txt = (f"**🚀 Awan Userbot**\n\n"
+           f"**Ping:** `{int(ping_ms)} ms`\n"
+           f"**CPU:** `{cpu_safe()}`\n"
+           f"**RAM:** `{psutil.virtual_memory().percent}%`\n"
+           f"**Disk:** `{psutil.disk_usage('/').percent}%`\n"
+           f"**Uptime:** `{uptime_str()}`")
+    await m.edit(txt)
 
 @client.on(events.NewMessage(pattern=r'^/whois(?:\s+(.+))?$'))
 async def whois(event):
@@ -465,25 +390,25 @@ async def whois(event):
         first_seen_text = first_seen.strftime("%Y-%m-%d %H:%M:%S") if first_seen else "Tidak ditemukan dalam riwayat (atau private)"
         joined_telegram = "Tidak tersedia dari API"
         text = (
-            f"👤 Informasi Pengguna\n\n"
-            f"Nama: {name}\n"
-            f"Username: {username}\n"
-            f"User ID: `{user.id}`\n"
-            f"No. Telepon: {phone}\n"
-            f"Akun Bot: {is_bot}\n"
-            f"Terverifikasi: {verified}\n"
-            f"Status terakhir: {status}\n"
-            f"Bio:\n`{about}`\n\n"
-            f"First seen di chat ini: {first_seen_text}\n"
-            f"Tanggal bergabung Telegram: {joined_telegram}"
+            f"👤 **Informasi Pengguna**\n\n"
+            f"**Nama:** {name}\n"
+            f"**Username:** {username}\n"
+            f"**User ID:** `{user.id}`\n"
+            f"**No. Telepon:** {phone}\n"
+            f"**Akun Bot:** {is_bot}\n"
+            f"**Terverifikasi:** {verified}\n"
+            f"**Status terakhir:** {status}\n"
+            f"**Bio:**\n`{about}`\n\n"
+            f"**First seen di chat ini:** {first_seen_text}\n"
+            f"**Tanggal bergabung Telegram:** {joined_telegram}"
         )
         if photo_file:
             await client.send_file(event.chat_id, io.BytesIO(photo_file), caption=text, reply_to=event.id)
             await m.delete()
             return
-        await m.edit(text) # Keep as text if no photo
+        await m.edit(text)
     except Exception as e:
-        await reply_with_image(event, "Error", f"Tidak dapat mengambil info: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTidak dapat mengambil info. `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/text (.+)$'))
 async def text2sticker(event):
@@ -519,9 +444,9 @@ async def ttsearch(event):
             await client.send_file(event.chat_id, file=info.get("play"), caption=f"{info.get('title')}", reply_to=event.id)
             await m.delete()
         else:
-            await reply_with_image(event, "Error", "Tidak ditemukan.", message_to_edit=m)
+            await m.edit("**Error**\n\nTidak ditemukan.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/ytsearch (.+)$'))
 async def ytsearch(event):
@@ -534,9 +459,9 @@ async def ytsearch(event):
         if res.get("status") and res.get("data"):
             videos = [i for i in res["data"] if i.get("type")=="video"][:5]
             if not videos:
-                await reply_with_image(event, "Error", "Tidak ada hasil video.", message_to_edit=m)
+                await m.edit("**Error**\n\nTidak ada hasil video.")
                 return
-            text = f"Hasil untuk `{q}`:\n\n"
+            text = f"**Hasil untuk `{q}`:**\n\n"
             for v in videos:
                 title = v.get("title")
                 url = v.get("url")
@@ -544,9 +469,9 @@ async def ytsearch(event):
                 text += f"{title}\nChannel: {channel}\n{url}\n\n"
             await m.edit(text, link_preview=False)
         else:
-            await reply_with_image(event, "Error", "Tidak ada hasil.", message_to_edit=m)
+            await m.edit("**Error**\n\nTidak ada hasil.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/pinterest (.+)$'))
 async def pinterest(event):
@@ -561,9 +486,9 @@ async def pinterest(event):
             await client.send_file(event.chat_id, file=info.get("image_url"), caption=info.get("grid_title",""), reply_to=event.id)
             await m.delete()
         else:
-            await reply_with_image(event, "Error", "Tidak ditemukan.", message_to_edit=m)
+            await m.edit("**Error**\n\nTidak ditemukan.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/twdl (.+)$'))
 async def twdl(event):
@@ -577,9 +502,9 @@ async def twdl(event):
             await client.send_file(event.chat_id, file=res["data"][0].get("url"), caption="✅ Selesai", reply_to=event.id)
             await m.delete()
         else:
-            await reply_with_image(event, "Error", "Gagal mengunduh.", message_to_edit=m)
+            await m.edit("**Error**\n\nGagal mengunduh.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/fbdl (.+)$'))
 async def fbdl(event):
@@ -593,9 +518,9 @@ async def fbdl(event):
             await client.send_file(event.chat_id, file=res["data"][0].get("url"), caption="✅ Selesai", reply_to=event.id)
             await m.delete()
         else:
-            await reply_with_image(event, "Error", "Gagal mengunduh.", message_to_edit=m)
+            await m.edit("**Error**\n\nGagal mengunduh.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/capcut (.+)$'))
 async def capcut(event):
@@ -609,9 +534,9 @@ async def capcut(event):
             await client.send_file(event.chat_id, file=res["data"][0].get("download"), caption="✅ Selesai", reply_to=event.id)
             await m.delete()
         else:
-            await reply_with_image(event, "Error", "Gagal mengunduh.", message_to_edit=m)
+            await m.edit("**Error**\n\nGagal mengunduh.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/scdl (.+)$'))
 async def scdl(event):
@@ -628,16 +553,16 @@ async def scdl(event):
                 await client.send_file(event.chat_id, file=dl["data"].get("download"), caption="✅ Selesai", reply_to=event.id)
                 await m.delete()
                 return
-        await reply_with_image(event, "Error", "Tidak ditemukan.", message_to_edit=m)
+        await m.edit("**Error**\n\nTidak ditemukan.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/topdf$'))
 async def topdf(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     if not event.is_reply:
-        await reply_with_image(event, "Error", "Reply ke foto/album untuk convert ke PDF.")
+        await event.reply("**Error**\n\nReply ke foto/album untuk convert ke PDF.")
         return
     msg = await event.get_reply_message()
     photos = []
@@ -652,7 +577,7 @@ async def topdf(event):
         img = Image.open(io.BytesIO(b)).convert("RGB")
         imgs.append(img)
     if not imgs:
-        await reply_with_image(event, "Error", "Tidak ada foto pada pesan reply.")
+        await event.reply("**Error**\n\nTidak ada foto pada pesan reply.")
         return
     out = io.BytesIO()
     imgs[0].save(out, format="PDF", save_all=True, append_images=imgs[1:])
@@ -666,17 +591,17 @@ async def resize(event):
     if not mode_public and not await is_authorized(sender): return
     size = event.pattern_match.group(1)
     if "x" not in size or not event.is_reply:
-        await reply_with_image(event, "Error", "Gunakan /resize WxH dan reply foto.")
+        await event.reply("**Error**\n\nGunakan /resize WxH dan reply foto.")
         return
     w,h = size.split("x")
     try:
         w,h = int(w), int(h)
     except:
-        await reply_with_image(event, "Error", "Ukuran tidak valid.")
+        await event.reply("**Error**\n\nUkuran tidak valid.")
         return
     msg = await event.get_reply_message()
     if not msg.photo:
-        await reply_with_image(event, "Error", "Reply ke foto.")
+        await event.reply("**Error**\n\nReply ke foto.")
         return
     b = await client.download_media(msg, file=bytes)
     img = Image.open(io.BytesIO(b)).convert("RGBA")
@@ -692,7 +617,7 @@ async def audiotext(event):
     sender = await event.get_sender()
     if not mode_public and not await is_authorized(sender): return
     if not event.is_reply:
-        await reply_with_image(event, "Error", "Reply voice/file audio.")
+        await event.reply("**Error**\n\nReply voice/file audio.")
         return
     m = await event.reply("🔄 Memproses...")
     msg = await event.get_reply_message()
@@ -708,9 +633,9 @@ async def audiotext(event):
         with sr.AudioFile(wav_path) as source:
             audio_data = r.record(source)
             text = r.recognize_google(audio_data, language="id-ID")
-        await reply_with_image(event, "Hasil Audio-to-Text", text, message_to_edit=m)
+        await m.edit(f"**Hasil Audio-to-Text**\n\n{text}")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Gagal memproses audio: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nGagal memproses audio: `{e}`")
     finally:
         for p in [temp_in, "tmp_audio.wav"]:
             if os.path.exists(p): os.remove(p)
@@ -722,7 +647,7 @@ async def setwelcome(event):
     data = load_data()
     data["welcome"][str(event.chat_id)] = txt
     save_data(data)
-    await reply_with_image(event, "Sukses", "Pesan selamat datang telah diatur.")
+    await event.reply("**Sukses**\n\nPesan selamat datang telah diatur.")
 
 @client.on(events.NewMessage(pattern=r'^/anti (on|off)$'))
 async def anti_link(event):
@@ -731,7 +656,7 @@ async def anti_link(event):
     data = load_data()
     data["anti_link"][str(event.chat_id)] = (v=="on")
     save_data(data)
-    await reply_with_image(event, "Sukses", f"Mode anti-link sekarang: {v}")
+    await event.reply(f"**Sukses**\n\nMode anti-link sekarang: `{v}`")
 
 @client.on(events.NewMessage())
 async def group_listener(event):
@@ -744,9 +669,8 @@ async def group_listener(event):
             if welcome_text:
                 uid = event.message.action.user_id
                 u = await client.get_entity(uid)
-                # We can't use markdown in the image, so just use the name
-                formatted_welcome = welcome_text.replace("{user}", u.first_name)
-                await reply_with_image(event, "Selamat Datang!", formatted_welcome)
+                formatted_welcome = welcome_text.replace("{user}", f"[{u.first_name}](tg://user?id={uid})")
+                await event.reply(f"**Selamat Datang!**\n\n{formatted_welcome}")
         except: pass
     if data["anti_link"].get(gid):
         if event.message.message and ("http://" in event.message.message or "https://" in event.message.message):
@@ -766,7 +690,7 @@ async def meme(event):
         await client.send_file(event.chat_id, res.get("url"), caption=res.get("title"), reply_to=event.id)
         await m.delete()
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/fancy (.+)$'))
 async def fancy(event):
@@ -794,19 +718,10 @@ async def quotes(event):
     m = await event.reply("💬 Mengambil kutipan...")
     try:
         res = requests.get("https://api.quotable.io/random", timeout=10).json()
-        title = f"— {res.get('author')}"
-        text = f"“{res.get('content')}”"
-
-        image_data = await create_response_image(title, text)
-        await client.send_file(
-            event.chat_id,
-            image_data,
-            force_document=False,
-            reply_to=event.id
-        )
-        await m.delete()
+        text = f"**“{res.get('content')}”**\n\n— *{res.get('author')}*"
+        await m.edit(text)
     except Exception as e:
-        await m.edit(f"❌ Error: {e}")
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/cekip$'))
 async def cekip(event):
@@ -817,22 +732,14 @@ async def cekip(event):
         ip = requests.get("https://api.ipify.org").text
         geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=10).json()
 
-        title = "Informasi IP"
-        text = (f"IP: {ip}\n"
-                f"Negara: {geo.get('country')}\n"
-                f"Kota: {geo.get('city')}\n"
-                f"ISP: {geo.get('isp')}")
-
-        image_data = await create_response_image(title, text)
-        await client.send_file(
-            event.chat_id,
-            image_data,
-            force_document=False,
-            reply_to=event.id
-        )
-        await m.delete()
+        text = (f"**Informasi IP**\n\n"
+                f"IP: `{ip}`\n"
+                f"Negara: `{geo.get('country')}`\n"
+                f"Kota: `{geo.get('city')}`\n"
+                f"ISP: `{geo.get('isp')}`")
+        await m.edit(text)
     except Exception as e:
-        await m.edit(f"❌ Error: {e}")
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/crypto (.+)$'))
 async def crypto(event):
@@ -843,25 +750,15 @@ async def crypto(event):
     try:
         res = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={quote(sym)}&vs_currencies=usd", timeout=10)
         if res.status_code != 200 or not res.json():
-            await m.edit(f"❌ Crypto dengan simbol `{sym}` tidak ditemukan.")
+            await m.edit(f"**Error**\n\nCrypto dengan simbol `{sym}` tidak ditemukan.")
             return
 
         data = res.json()
         usd = list(data.values())[0].get("usd")
-
-        title = f"Harga {sym.upper()}"
-        text = f"1 {sym.upper()} = ${usd}"
-
-        image_data = await create_response_image(title, text)
-        await client.send_file(
-            event.chat_id,
-            image_data,
-            force_document=False,
-            reply_to=event.id
-        )
-        await m.delete()
+        text = f"**Harga {sym.upper()}**\n\n1 {sym.upper()} = `${usd}`"
+        await m.edit(text)
     except Exception as e:
-        await m.edit(f"❌ Error: {e}")
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/cuaca (.+)$'))
 async def cuaca(event):
@@ -873,25 +770,17 @@ async def cuaca(event):
         apikey = os.environ.get("OPENWEATHER_API_KEY", "e3cd2c303e5164b7d10b7bcd0c8160e5")
         res = requests.get(f"http://api.openweathermap.org/data/2.5/weather?q={quote(kota)}&appid={apikey}&units=metric&lang=id", timeout=10)
         if res.status_code != 200:
-            await m.edit("❌ Gagal mengambil data cuaca. Pastikan nama kota benar.")
+            await m.edit("**Error**\n\nGagal mengambil data cuaca. Pastikan nama kota benar.")
             return
 
         d = res.json()
-        title = f"Cuaca di {d['name']}"
-        text = (f"{d['weather'][0]['description'].capitalize()}\n"
-                f"Suhu: {d['main']['temp']}°C\n"
-                f"Kelembapan: {d['main']['humidity']}%")
-
-        image_data = await create_response_image(title, text)
-        await client.send_file(
-            event.chat_id,
-            image_data,
-            force_document=False,
-            reply_to=event.id
-        )
-        await m.delete()
+        text = (f"**Cuaca di {d['name']}**\n\n"
+                f"{d['weather'][0]['description'].capitalize()}\n"
+                f"Suhu: `{d['main']['temp']}°C`\n"
+                f"Kelembapan: `{d['main']['humidity']}%`")
+        await m.edit(text)
     except Exception as e:
-        await m.edit(f"❌ Error: {e}")
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/shortlink (.+)$'))
 async def shortlink(event):
@@ -902,11 +791,11 @@ async def shortlink(event):
     try:
         res = requests.post("https://cleanuri.com/api/v1/shorten", data={"url": url}, timeout=10).json()
         if res.get("result_url"):
-            await reply_with_image(event, "Link Pendek", res['result_url'], message_to_edit=m)
+            await m.edit(f"**Link Pendek**\n\n{res['result_url']}")
         else:
-            await reply_with_image(event, "Error", "Gagal memendekkan link.", message_to_edit=m)
+            await m.edit("**Error**\n\nGagal memendekkan link.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/github (.+)$'))
 async def github(event):
@@ -917,7 +806,7 @@ async def github(event):
     try:
         res = requests.get(f"https://api.github.com/users/{quote(username)}", timeout=10).json()
         if res.get("message") == "Not Found":
-            await reply_with_image(event, "Error", f"Pengguna GitHub `{username}` tidak ditemukan.", message_to_edit=m)
+            await m.edit(f"**Error**\n\nPengguna GitHub `{username}` tidak ditemukan.")
             return
 
         name = res.get('name') or 'Tidak ada nama'
@@ -953,9 +842,9 @@ async def github(event):
                 return
             except:
                 pass
-        await m.edit(text, link_preview=False) # Keep as text if no photo
+        await m.edit(text, link_preview=False)
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/tr ([\w-]+) (.+)'))
 async def translate(event):
@@ -969,19 +858,9 @@ async def translate(event):
         res = requests.get(url, timeout=10).json()
         translated_text = res[0][0][0]
         from_lang = res[2]
-
-        title = f"Terjemahan {from_lang} -> {to_lang}"
-
-        image_data = await create_response_image(title, translated_text)
-        await client.send_file(
-            event.chat_id,
-            image_data,
-            force_document=False,
-            reply_to=event.id
-        )
-        await m.delete()
+        await m.edit(f"**Diterjemahkan dari `{from_lang}` ke `{to_lang}`:**\n\n{translated_text}")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Gagal menerjemahkan: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nGagal menerjemahkan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/ud (.+)$'))
 async def urban_dictionary(event):
@@ -992,7 +871,7 @@ async def urban_dictionary(event):
     try:
         res = requests.get(f"https://api.urbandictionary.com/v0/define?term={quote(term)}", timeout=10).json()
         if not res or not res.get("list"):
-            await reply_with_image(event, "Error", f"Tidak ada definisi untuk `{term}`.", message_to_edit=m)
+            await m.edit(f"**Error**\n\nTidak ada definisi untuk `{term}`.")
             return
 
         definition = res['list'][0]
@@ -1000,67 +879,14 @@ async def urban_dictionary(event):
         meaning = definition.get('definition', '').replace('[', '').replace(']', '')
         example = definition.get('example', '').replace('[', '').replace(']', '')
 
-        title = f"Definisi \"{word}\""
-        text = f"{meaning}\n\nContoh:\n{example}"
-
-        await reply_with_image(event, title, text, message_to_edit=m)
-    except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {e}", message_to_edit=m)
-
-@client.on(events.NewMessage(pattern=r'^/tts (.+)$'))
-async def text_to_speech(event):
-    sender = await event.get_sender()
-    if not mode_public and not await is_authorized(sender): return
-
-    text = event.pattern_match.group(1)
-    m = await event.reply("🎤 Memproses Text-to-Speech...")
-
-    if EDENAI_API_KEY == "YOUR_EDENAI_API_KEY" or not EDENAI_API_KEY:
-        await reply_with_image(event, "Error", "Kunci API Eden AI belum diatur. Silakan daftar di https://app.edenai.run/admin/account/settings dan atur `EDENAI_API_KEY` di file wanz.py.", message_to_edit=m)
-        return
-
-    headers = {"Authorization": f"Bearer {EDENAI_API_KEY}"}
-    payload = {
-        "providers": "openai",
-        "language": "id-ID",
-        "option": "FEMALE",
-        "text": text,
-        "fallback_providers": "google"
-    }
-    url = "https://api.edenai.run/v2/audio/text_to_speech"
-
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=60)
-        response.raise_for_status()
-        result = response.json()
-
-        if result.get('openai', {}).get('status') != 'success':
-            error_message = result.get('openai', {}).get('error', {}).get('message', 'Error tidak diketahui')
-            await reply_with_image(event, "Error", f"Gagal menghasilkan audio: {error_message}", message_to_edit=m)
-            return
-
-        audio_base64 = result['openai']['audio']
-        audio_data = base64.b64decode(audio_base64)
-
-        file_path = "tts_output.ogg"
-        with open(file_path, "wb") as f:
-            f.write(audio_data)
-
-        await client.send_file(
-            event.chat_id,
-            file_path,
-            voice_note=True,
-            reply_to=event.id
+        text = (
+            f"**Definisi untuk `{word}`:**\n\n"
+            f"**Arti:**\n{meaning}\n\n"
+            f"**Contoh:**\n_{example}_"
         )
-        await m.delete()
-
-    except requests.exceptions.RequestException as e:
-        await reply_with_image(event, "Error", f"Error koneksi ke Eden AI: {e}", message_to_edit=m)
+        await m.edit(text)
     except Exception as e:
-        await reply_with_image(event, "Error", f"Terjadi error: {e}", message_to_edit=m)
-    finally:
-        if os.path.exists("tts_output.ogg"):
-            os.remove("tts_output.ogg")
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{e}`")
 
 @client.on(events.NewMessage(pattern=r'^/createweb$'))
 async def start_create_web(event):
@@ -1069,7 +895,7 @@ async def start_create_web(event):
 
     user_interaction_state[sender.id] = "awaiting_web_description"
 
-    await reply_with_image(event, "Pembuat Website AI", "Jelaskan situs web seperti apa yang Anda inginkan di pesan berikutnya.")
+    await event.reply("**Pembuat Website AI**\n\nJelaskan situs web seperti apa yang Anda inginkan di pesan berikutnya.")
 
 async def generate_website_code(prompt: str):
     """Calls the Eden AI API to generate website code."""
@@ -1128,7 +954,7 @@ async def handle_web_description(event):
 
     if description.startswith('/'):
         del user_interaction_state[sender.id]
-        await reply_with_image(event, "Info", "Pembuatan situs web dibatalkan.")
+        await event.reply("**Info**\n\nPembuatan situs web dibatalkan.")
         return
 
     del user_interaction_state[sender.id]
@@ -1142,7 +968,7 @@ async def handle_web_description(event):
     loading_task.cancel()
 
     if error:
-        await reply_with_image(event, "Error", f"Terjadi kesalahan: {error}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nTerjadi kesalahan: `{error}`")
         return
 
     # Clean the generated code
@@ -1167,7 +993,7 @@ async def handle_web_description(event):
         )
         await m.delete()
     except Exception as e:
-        await reply_with_image(event, "Error", f"Gagal mengirim file: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nGagal mengirim file: `{e}`")
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -1181,7 +1007,7 @@ async def handle_tempmail(event):
     if not mode_public and not await is_authorized(sender): return
 
     if RAPIDAPI_KEY == "YOUR_RAPIDAPI_KEY" or not RAPIDAPI_KEY:
-        await reply_with_image(event, "Error", "Kunci RapidAPI belum diatur. Silakan daftar di https://rapidapi.com/privatix-temp-mail-v1/api/privatix-temp-mail-v1 dan atur `RAPIDAPI_KEY` di file wanz.py.")
+        await event.reply("**Error**\n\nKunci RapidAPI belum diatur. Silakan daftar di https://rapidapi.com/privatix-temp-mail-v1/api/privatix-temp-mail-v1 dan atur `RAPIDAPI_KEY` di file wanz.py.")
         return
 
     global temp_mail_address
@@ -1196,14 +1022,14 @@ async def handle_tempmail(event):
         try:
             loop = asyncio.get_event_loop()
             temp_mail_address = await loop.run_in_executor(None, tm.get_email_address)
-            text = f"Email sementara Anda: {temp_mail_address}\n\nGunakan /tempmail check untuk memeriksa kotak masuk."
-            await reply_with_image(event, "Email Sementara Dibuat", text, message_to_edit=m)
+            text = f"**Email Sementara Dibuat**\n\nEmail sementara Anda: `{temp_mail_address}`\n\nGunakan `/tempmail check` untuk memeriksa kotak masuk."
+            await m.edit(text)
         except Exception as e:
-            await reply_with_image(event, "Error", f"Gagal membuat email: {e}", message_to_edit=m)
+            await m.edit(f"**Error**\n\nGagal membuat email: `{e}`")
 
     elif cmd == "check":
         if not temp_mail_address:
-            await reply_with_image(event, "Error", "Anda belum membuat email. Gunakan `/tempmail get` terlebih dahulu.")
+            await event.reply("**Error**\n\nAnda belum membuat email. Gunakan `/tempmail get` terlebih dahulu.")
             return
 
         m = await event.reply(f"🔎 Memeriksa kotak masuk untuk `{temp_mail_address}`...")
@@ -1211,25 +1037,26 @@ async def handle_tempmail(event):
             loop = asyncio.get_event_loop()
             mailbox = await loop.run_in_executor(None, lambda: tm.get_mailbox(email=temp_mail_address))
             if not mailbox or (isinstance(mailbox, dict) and mailbox.get("error")):
-                await reply_with_image(event, "Info", "Kotak masuk kosong.", message_to_edit=m)
+                await m.edit("**Info**\n\nKotak masuk kosong.")
                 return
 
-            text = ""
+            text = f"**Kotak Masuk untuk `{temp_mail_address}`:**\n\n"
             for mail in mailbox[:5]: # Limit to 5 emails to avoid being too long
-                text += f"Dari: {mail['mail_from']}\n"
-                text += f"Subjek: {mail['mail_subject']}\n"
-                text += f"Waktu: {datetime.fromtimestamp(mail['mail_timestamp']).strftime('%Y-%m-%d %H:%M:%S')}\n"
+                text += f"**Dari:** `{mail['mail_from']}`\n"
+                text += f"**Subjek:** `{mail['mail_subject']}`\n"
+                text += f"**Waktu:** {datetime.fromtimestamp(mail['mail_timestamp']).strftime('%Y-%m-%d %H:%M:%S')}\n"
                 text += "--------------------------------------\n"
 
-            await reply_with_image(event, f"Kotak Masuk: {temp_mail_address}", text, message_to_edit=m)
+            await m.edit(text)
 
         except Exception as e:
-            await reply_with_image(event, "Error", f"Gagal memeriksa kotak masuk: {e}", message_to_edit=m)
+            await m.edit(f"**Error**\n\nGagal memeriksa kotak masuk: `{e}`")
 
     else:
-        text = ("/tempmail get - Membuat alamat email sementara baru.\n"
-                "/tempmail check - Memeriksa kotak masuk dari email yang dibuat.")
-        await reply_with_image(event, "Perintah TempMail", text)
+        text = ("**Perintah TempMail**\n\n"
+                "`/tempmail get` - Membuat alamat email sementara baru.\n"
+                "`/tempmail check` - Memeriksa kotak masuk dari email yang dibuat.")
+        await event.reply(text)
 
 
 @client.on(events.NewMessage(pattern=r'^/group$'))
@@ -1238,18 +1065,18 @@ async def handle_group_menu(event):
     if not mode_public and not await is_authorized(sender): return
 
     menu_text = (
-        "Berikut adalah perintah yang tersedia untuk manajemen grup:\n\n"
-        "/setwelcome <teks>: Mengatur pesan selamat datang.\n"
-        "/anti <on/off>: Mengaktifkan/menonaktifkan anti-link.\n"
-        "/kick <@user/reply>: Mengeluarkan anggota dari grup."
+        "**Menu Manajemen Grup**\n\n"
+        "`/setwelcome <teks>`: Mengatur pesan selamat datang.\n"
+        "`/anti <on/off>`: Mengaktifkan/menonaktifkan anti-link.\n"
+        "`/kick <@user/reply>`: Mengeluarkan anggota dari grup."
     )
-    await reply_with_image(event, "Menu Manajemen Grup", menu_text)
+    await event.reply(menu_text)
 
 
 @client.on(events.NewMessage(pattern=r'^/kick(?: (.*))?$'))
 async def kick_user(event):
     if event.is_private:
-        await reply_with_image(event, "Error", "Perintah ini hanya bisa digunakan di grup.")
+        await event.reply("**Error**\n\nPerintah ini hanya bisa digunakan di grup.")
         return
 
     sender = await event.get_sender()
@@ -1260,26 +1087,26 @@ async def kick_user(event):
     try:
         perms = await client.get_permissions(event.chat_id, me.id)
         if not perms.ban_users:
-            await reply_with_image(event, "Error", "Saya tidak punya izin untuk menendang pengguna di sini.", message_to_edit=m)
+            await m.edit("**Error**\n\nSaya tidak punya izin untuk menendang pengguna di sini.")
             return
     except:
-        await reply_with_image(event, "Error", "Gagal memeriksa izin admin.", message_to_edit=m)
+        await m.edit("**Error**\n\nGagal memeriksa izin admin.")
         return
 
     target_user = await get_target_user(event)
     if not target_user:
-        await reply_with_image(event, "Error", "Pengguna tidak ditemukan. Balas pesan pengguna atau berikan username/ID.", message_to_edit=m)
+        await m.edit("**Error**\n\nPengguna tidak ditemukan. Balas pesan pengguna atau berikan username/ID.")
         return
 
     if target_user.id == me.id:
-        await reply_with_image(event, "Info", "Saya tidak bisa menendang diri sendiri.", message_to_edit=m)
+        await m.edit("**Info**\n\nSaya tidak bisa menendang diri sendiri.")
         return
 
     try:
         await client.kick_participant(event.chat_id, target_user.id)
-        await reply_with_image(event, "Sukses", f"Pengguna {target_user.first_name} ({target_user.id}) telah ditendang dari grup.", message_to_edit=m)
+        await m.edit(f"**Sukses**\n\nPengguna {target_user.first_name} (`{target_user.id}`) telah ditendang dari grup.")
     except Exception as e:
-        await reply_with_image(event, "Error", f"Gagal menendang pengguna: {e}", message_to_edit=m)
+        await m.edit(f"**Error**\n\nGagal menendang pengguna: `{e}`")
 
 
 async def main():
